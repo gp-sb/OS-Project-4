@@ -10,25 +10,27 @@ DISK_ERROR = -1
 
 def main():
     filename = "disk.img"
-    disk = open_disk(filename, 1024)  # 1KB disk
+    disk = open_disk(filename, 1024)  # 1KB disk for now...
     
     if disk == DISK_ERROR:
         print("Failed to open disk")
         return 1
     
-    write_data = bytearray("Hello, World!".ljust(BLOCKSIZE, '\x00'), 'utf-8')
-    if write_block(disk, 0, write_data) != DISK_OK:
+    # write
+    write_data = bytearray("Hey, Joe. What you doing with that gun in your hand?!".ljust(BLOCKSIZE, '\x00'), 'utf-8')
+    if write_block(disk, 0, write_data) != DISK_OK: # cehck write OK
         print("Failed to write block")
         close_disk(disk)
         return 1
 
+    # read
     read_data = bytearray(BLOCKSIZE)
     if read_block(disk, 0, read_data) != DISK_OK:
         print("Failed to read block")
         close_disk(disk)
         return 1
     
-    print("Read data:", read_data.decode('utf-8').rstrip('\x00'))
+    print("Read:", read_data.decode('utf-8').rstrip('\x00'))
 
     close_disk(disk)
     return 0
@@ -40,6 +42,7 @@ def open_disk(filename, nBytes):
     # his function opens a regular UNIX file and designates the first 
     # nBytes of it as space for the emulated disk.
     try:
+        #check byte
         if nBytes > 0:
             with open(filename, 'wb') as f:
                 f.truncate(nBytes)
