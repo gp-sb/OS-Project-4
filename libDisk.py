@@ -1,6 +1,8 @@
 import os
 
 BLOCKSIZE = 256
+DEFAULT_DISK_SIZE = 10240
+DEFAULT_DISK_NAME = "tinyFSDisk"
 
 # errors
 DISK_OK = 0
@@ -10,11 +12,11 @@ DISK_ERROR = -1
 
 def main():
     filename = "disk.img"
-    disk = open_disk(filename, 1024)  # 1KB disk for now...
+    disk = open_disk(filename, DEFAULT_DISK_SIZE)  # 1KB disk for now...
     
     if disk == DISK_ERROR:
-        print("Failed to open disk")
-        return 1
+            print("Failed to open disk")
+            return 1
     
     # write
     write_data = bytearray("Hey, Joe. What you doing with that gun in your hand?!".ljust(BLOCKSIZE, '\x00'), 'utf-8')
