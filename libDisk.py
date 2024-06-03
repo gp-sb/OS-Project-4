@@ -2,6 +2,7 @@ import os
 
 BLOCKSIZE = 256
 DEFAULT_DISK_SIZE = 10240
+NUMBER_OF_BLOCKS = DEFAULT_DISK_SIZE // BLOCKSIZE
 DEFAULT_DISK_NAME = "tinyFSDisk"
 
 # errors
@@ -36,8 +37,6 @@ def main():
 
     close_disk(disk)
     return 0
-
-
 
 
 def open_disk(filename, nBytes):
