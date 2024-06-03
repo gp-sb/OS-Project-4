@@ -46,7 +46,7 @@ def main():
     write_data_to_inode(disk, 2, b"Bello, Borld!")
 
     #Writes data to inode 1 again, but fills out the previous block and goes to the next block, notice the gap between 
-    # inode 2's block and inode 1's block
+    # inode 2's block and the new inode 1 block
     write_data_to_inode(disk, 1, b"a new block for 1a new block for 1a new block for 1a new 1a new block for 1a new1a new block for 1a new ")
 
     #Uncomment this if you want to see the inode's limits. This will pass the limit of 6 blocks per inode, and will return an error
