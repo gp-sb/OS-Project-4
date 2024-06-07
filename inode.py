@@ -1,5 +1,6 @@
 from libDisk import *
 from tinyFSHelpers import *
+from utils import to_bytes, read_int_bytes, make_blocksize
 
 
 MAX_INODES = 20
@@ -22,10 +23,16 @@ class Inode:
 
     #Determines the INODE_SIZE
     def toBytes(self):
-        blocks = [to_bytes(x, 1) for x in self.direct_blocks]
+        #blocks = [to_bytes(x, 1) for x in self.direct_blocks] # why 1 
+        blocks = [to_bytes(x, 4) for x in self.direct_blocks]
         return bytearray(to_bytes(self.size, 4) + \
-                            to_bytes(self.remaining_bytes_in_current_block, 2) + \
-                b''.join(blocks))
+                         to_bytes(self.remaining_bytes_in_current_block, 2) + \
+                         b''.join(blocks))
+
+    def fromBytes(self, data):
+        self.size = read_int_bytes(data, INODE_SIZE_OFFSET, 4)
+        self.remaining_bytes_in_current_block = read_int_bytes(data, REMAINING_DATA_IN_CURRENT_BLOCK_OFFSET, 2)
+        self.direct_blocks = [read_int_bytes(data, DIRECT_BLOCK_OFFSET + i*4, 4) for i in range(MAX_BLOCKS_PER_INODE)]
 
 def write_initial_inodes(disk):
     empty_inode = Inode(b'')
@@ -53,11 +60,26 @@ def write_initial_inodes(disk):
 
     return DISK_OK
     
-def read_inode(disk, inode_number):
-    inode_bytes = bytearray(256)
-    read_block(disk, 1, inode_bytes)
-    return inode_bytes[INODE_SIZE*inode_number : INODE_SIZE*(inode_number+1)]
+# def read_inode(disk, inode_number):
+#     inode_bytes = bytearray(256)
+#     read_block(disk, 1, inode_bytes)
+#     return inode_bytes[INODE_SIZE*inode_number : INODE_SIZE*(inode_number+1)]
 
+def read_inode(disk, inode_number):
+    inode_block_bytes = bytearray(BLOCKSIZE)
+    read_block(disk, 1, inode_block_bytes)
+    inode_bytes = inode_block_bytes[INODE_SIZE*inode_number : INODE_SIZE*(inode_number+1)]
+    return Inode(inode_bytes)
+
+def write_inode(disk, inode_number, inode):
+    inode_block_bytes = bytearray(BLOCKSIZE)
+    read_block(disk, 1, inode_block_bytes)
+    inode_bytes = inode.toBytes()
+    start_index = INODE_SIZE * inode_number
+    end_index = start_index + INODE_SIZE
+    inode_block_bytes[start_index:end_index] = inode_bytes
+    write_block(disk, 1, make_blocksize(inode_block_bytes))
+    
 # Determines if we can add data to old block, or if we need to add a new block, updates the inode accordingly,
 # Returns:
 #   - prev_block_number: The block number that is currently being written to, if -1, then we do not write to that block

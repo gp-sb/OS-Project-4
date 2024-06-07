@@ -1,5 +1,8 @@
 from libDisk import *
 from superblock import *
+from inode import *
+from utils import to_bytes, read_int_bytes
+
 
 # Flips the bit at the given block number in the free block bitmap, returns if successful
 def flip_free_block_bit(tfs, block_number):
@@ -29,11 +32,6 @@ def allocate_block(disk):
             
     return DISK_ERROR
 
-# Makes data's size block size, if smaller. Leaves data unchanged if larger
-def make_blocksize(data):
-    if len(data) < BLOCKSIZE:
-        return data + bytes(BLOCKSIZE - len(data))
-    return data
 
 #Prints all blocks on disk that are not all 0s
 def print_disk(disk):
@@ -52,11 +50,3 @@ def insert_data(buffer, index, data, data_size):
 def insert_byte_data(buffer, index, data):
     buffer[index: index + len(data)] = data
     return buffer
-
-#Converts most things into bytes
-def to_bytes(data, data_size):
-    return data.to_bytes(data_size, byteorder='big')
-
-#Reads a given number of bytes from a buffer at a given offset and returns the integer value
-def read_int_bytes(data, offset, size):
-    return int.from_bytes(data[offset: offset + size], byteorder="big")
