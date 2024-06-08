@@ -1,38 +1,54 @@
 from libDisk import *
-from tinyFSHelpers import *
+from tinyFSHelpers import set_inodes_per_block, get_inodes_per_block, allocate_block, insert_byte_data, insert_data
 from utils import to_bytes, read_int_bytes, make_blocksize
 
 
 MAX_INODES = 20
 MAX_BLOCKS_PER_INODE = 6
-INODE_SIZE_OFFSET = 0
-REMAINING_DATA_IN_CURRENT_BLOCK_OFFSET = 4
-DIRECT_BLOCK_OFFSET = 6
+INODE_SIZE_OFFSET = 2
+REMAINING_DATA_IN_CURRENT_BLOCK_OFFSET = 6
+DIRECT_BLOCK_OFFSET = 8
 
 ROOT_INODE = (0x02 + (0x00 * MAX_INODES)).to_bytes(12, byteorder='little')
-INODE_SIZE = 12 #Subject to change
+INODE_SIZE = 14 #Subject to change
 
 
 #Object to load data into, so we can use in python
 class Inode:
     def __init__(self, data):
-        self.size = len(data)           # Needed to know how much of last block is used
-        self.max_data_size = 256 * MAX_BLOCKS_PER_INODE    # In bytes
-        self.remaining_bytes_in_current_block = 0
-        self.direct_blocks = [0] * MAX_BLOCKS_PER_INODE    # 6 direct blocks
+        
+        #if we are reading data or just creating a new inode
+        if data != b'':
+            self.fromBytes(data)
+        else:
+            self.number = 0
+            self.size = len(data)           # Needed to know how much of last block is used
+            self.max_data_size = 256 * MAX_BLOCKS_PER_INODE    # In bytes
+            self.remaining_bytes_in_current_block = 0
+            self.direct_blocks = [0] * MAX_BLOCKS_PER_INODE    # 6 direct blocks
 
     #Determines the INODE_SIZE
     def toBytes(self):
-        #blocks = [to_bytes(x, 1) for x in self.direct_blocks] # why 1 
-        blocks = [to_bytes(x, 4) for x in self.direct_blocks]
-        return bytearray(to_bytes(self.size, 4) + \
+        blocks = [to_bytes(x, 1) for x in self.direct_blocks]
+        return bytearray(to_bytes(self.number, 2) + \
+                         to_bytes(self.size, 4) + \
                          to_bytes(self.remaining_bytes_in_current_block, 2) + \
                          b''.join(blocks))
 
     def fromBytes(self, data):
+        self.number = read_int_bytes(data, 0, 2)
         self.size = read_int_bytes(data, INODE_SIZE_OFFSET, 4)
         self.remaining_bytes_in_current_block = read_int_bytes(data, REMAINING_DATA_IN_CURRENT_BLOCK_OFFSET, 2)
-        self.direct_blocks = [read_int_bytes(data, DIRECT_BLOCK_OFFSET + i*4, 4) for i in range(MAX_BLOCKS_PER_INODE)]
+        self.direct_blocks = [read_int_bytes(data, DIRECT_BLOCK_OFFSET + i, 1) for i in range(MAX_BLOCKS_PER_INODE)]
+
+def remove_inode(disk, inode_number):
+    inode_block_bytes = bytearray(BLOCKSIZE)
+    read_block(disk, 2, inode_block_bytes)
+    inode_index = inode_number * INODE_SIZE
+    empty_inode = Inode(b'')
+    empty_inode.number = inode_number
+    insert_byte_data(inode_block_bytes, inode_index, empty_inode.toBytes())
+    return write_block(disk, 2, inode_block_bytes)
 
 def write_initial_inodes(disk):
     empty_inode = Inode(b'')
@@ -41,22 +57,29 @@ def write_initial_inodes(disk):
     blocks_needed_for_inodes = space_needed_for_inodes // BLOCKSIZE
     inodes_per_block = BLOCKSIZE // INODE_SIZE
 
+    set_inodes_per_block(disk, inodes_per_block)
+
     #This is the case where the Inodes and the root inode cannot fit in one block, so we will fill the inodes out
     #and then write the root inode to the next block, at the end of block 0. I'd prefer the latter.
-    current_block = 1
-    while current_block != (blocks_needed_for_inodes + 2):          #Two is from: initial_block_number + total_blocks_needed
+    current_block = 2
+    final_block = blocks_needed_for_inodes + current_block
+    current_inode = 0
+    while current_block != final_block+1:          #Two is from: initial_block_number + total_blocks_needed
         inode_bytes = b""
 
         #This block labels the inodes with numbers, just keeping this for now so  we can clearly see them
-        # for i in range(inodes_per_block):
-        #     b = empty_inode.toBytes()
-        #     b[0] = i
-        #     inode_bytes += b
-        inode_bytes += empty_inode.toBytes() * inodes_per_block
+        for i in range(inodes_per_block):
+            empty_inode.number = current_inode
+            b = empty_inode.toBytes()
+            inode_bytes += b
+            current_inode += 1
+            if current_inode == MAX_INODES:
+                break
         
         if(write_block(disk, current_block, make_blocksize(inode_bytes))) != DISK_OK:
             return DISK_ERROR
-        blocks_needed_for_inodes -= 1
+        
+        current_block += 1
 
     return DISK_OK
     
@@ -67,8 +90,12 @@ def write_initial_inodes(disk):
 
 def read_inode(disk, inode_number):
     inode_block_bytes = bytearray(BLOCKSIZE)
-    read_block(disk, 1, inode_block_bytes)
-    inode_bytes = inode_block_bytes[INODE_SIZE*inode_number : INODE_SIZE*(inode_number+1)]
+
+    inodes_per_block = get_inodes_per_block(disk)
+    block_offset = 2 + (inode_number // inodes_per_block)
+    inode_offset = inode_number % inodes_per_block
+    read_block(disk, block_offset, inode_block_bytes)
+    inode_bytes = inode_block_bytes[INODE_SIZE*inode_offset : INODE_SIZE*(inode_offset+1)]
     return Inode(inode_bytes)
 
 def write_inode(disk, inode_number, inode):
@@ -89,7 +116,7 @@ def add_block_to_inode(disk, inode_number, data_size):
 
     #Read entire Inode block
     inode_block_bytes = bytearray(BLOCKSIZE)
-    read_block(disk, 1, inode_block_bytes)
+    read_block(disk, 2, inode_block_bytes)
     inode_index = inode_number * INODE_SIZE
 
     #Get specific Inode's bytes
@@ -147,7 +174,7 @@ def add_block_to_inode(disk, inode_number, data_size):
     inode_block_bytes = insert_data(inode_block_bytes, inode_index + INODE_SIZE_OFFSET, inode_size, 4)
 
     #Write the updated inode back to disk
-    if write_block(disk, 1, inode_block_bytes) == DISK_OK:
+    if write_block(disk, 2, inode_block_bytes) == DISK_OK:
         return prev_block_number, new_block_number, remaining_space_in_current_block
     else:
         return -1, -1, DISK_ERROR
@@ -175,17 +202,17 @@ def write_data_to_inode(disk, inode_number, data):
         if prev_block_number != -1 and new_block_number != -1:
 
             #Write to the previous block
-            bytes_to_write_to_new_block = BLOCKSIZE - remaining_bytes_in_block
-            bytes_to_write_to_prev_block = write_length - bytes_to_write_to_new_block
+            bytes_to_new_block = BLOCKSIZE - remaining_bytes_in_block
+            bytes_to_prev_block = write_length - bytes_to_new_block
             read_block(disk, prev_block_number, write_bytes)
-            write_bytes = insert_byte_data(write_bytes, BLOCKSIZE - bytes_to_write_to_prev_block, data[:bytes_to_write_to_prev_block])
+            write_bytes = insert_byte_data(write_bytes, BLOCKSIZE - bytes_to_prev_block, data[:bytes_to_prev_block])
             if write_block(disk, prev_block_number, write_bytes) != DISK_OK:
                 return DISK_ERROR
             
             #Write to the new block
             write_bytes = bytearray(BLOCKSIZE)
             read_block(disk, new_block_number, write_bytes)
-            write_bytes = insert_byte_data(write_bytes, 0, data[bytes_to_write_to_prev_block:write_length])
+            write_bytes = insert_byte_data(write_bytes, 0, data[bytes_to_prev_block:write_length])
             if write_block(disk, new_block_number, make_blocksize(write_bytes)) != DISK_OK:
                 return DISK_ERROR
         

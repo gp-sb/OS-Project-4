@@ -2,8 +2,6 @@
 
 from libDisk import BLOCKSIZE
 
-
-
 def to_bytes(data, data_size):
     return data.to_bytes(data_size, byteorder='big')
 
@@ -15,3 +13,4 @@ def make_blocksize(data):
     if len(data) < BLOCKSIZE:
         return data + bytes(BLOCKSIZE - len(data))
     return data[:BLOCKSIZE]
+

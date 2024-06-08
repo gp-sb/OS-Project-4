@@ -1,6 +1,5 @@
 from libDisk import *
 from superblock import *
-from inode import *
 from utils import to_bytes, read_int_bytes
 
 
@@ -28,7 +27,7 @@ def allocate_block(disk):
             data[i] = 1
             if(write_block(disk, 0, data) != DISK_OK):
                 return DISK_ERROR
-            return i - BITMAP_OFFSET + 2        #2 to offset for the superblock and root inode blocks
+            return i - BITMAP_OFFSET
             
     return DISK_ERROR
 
@@ -50,3 +49,25 @@ def insert_data(buffer, index, data, data_size):
 def insert_byte_data(buffer, index, data):
     buffer[index: index + len(data)] = data
     return buffer
+
+def set_inodes_per_block(disk, number_of_inodes):
+    data = bytearray(BLOCKSIZE)
+    read_block(disk, 0, data)
+    insert_data(data, INODES_PER_BLOCK_OFFSET, number_of_inodes, 1)
+    return write_block(disk, 0, data)
+
+def get_inodes_per_block(disk):
+    data = bytearray(BLOCKSIZE)
+    read_block(disk, 0, data)
+    return read_int_bytes(data, INODES_PER_BLOCK_OFFSET, 1)
+
+def free_block(disk, block_number):
+    data = bytearray(BLOCKSIZE)
+    read_block(disk, 0, data)
+    data[BITMAP_OFFSET + block_number] = 0
+
+    #Write the updated bitmap back to disk
+    if write_block(disk, 0, data):
+        #Zero out the block
+        return write_block(disk, block_number, bytearray(BLOCKSIZE))
+    return DISK_ERROR
