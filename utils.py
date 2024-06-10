@@ -29,6 +29,6 @@ def find_ranges(bitmap_block):
                 
     # Add the last range if it ends with 1s
     if start is not None:
-        ranges.append((start, len(lst) - 1))
+        ranges.append((start, len(bitmap_block) - 1))
     
     return ranges
