@@ -67,7 +67,15 @@ def free_block(disk, block_number):
     data[BITMAP_OFFSET + block_number] = 0
 
     #Write the updated bitmap back to disk
-    if write_block(disk, 0, data):
+    if write_block(disk, 0, data) == DISK_OK:
         #Zero out the block
         return write_block(disk, block_number, bytearray(BLOCKSIZE))
     return DISK_ERROR
+
+def swap_blocks(disk, block1, block2):
+    data = bytearray(BLOCKSIZE)
+    read_block(disk, block1, data)
+    temp = bytearray(BLOCKSIZE)
+    read_block(disk, block2, temp)
+    write_block(disk, block1, temp)
+    write_block(disk, block2, data)

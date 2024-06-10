@@ -2,7 +2,7 @@ from superblock import *
 from libDisk import *
 from tinyFSHelpers import *
 from inode import *
-from utils import to_bytes, read_int_bytes
+from utils import to_bytes, read_int_bytes, find_ranges
 
 # Global variables
 current_disk = None
@@ -71,7 +71,6 @@ def find_inode_by_name(name):
     # Assume fixed size entries for file names (8 bytes) and inode numbers (4 bytes)
     entry_size = 10
     for i in range(0, len(root_dir_block), entry_size):
-        print(i, root_dir_block[i:i+8])
         if root_dir_block[i:i+8].decode('utf-8').strip('\x00') == name:
             return read_int_bytes(root_dir_block, i+8, 2)
     return DISK_ERROR
@@ -85,7 +84,6 @@ def create_inode(name):
     read_block(current_disk, 1, root_dir_block)
     entry_size = 10
     for i in range(0, len(root_dir_block), entry_size):
-        print(i, root_dir_block[i:i+8])
         if root_dir_block[i:i+8] == bytearray(8):
             inode_num = i // entry_size
             root_dir_block[i:i+8] = name.ljust(8, '\x00').encode('utf-8')
@@ -124,31 +122,12 @@ def tfs_write(fd, buffer, size):
         return DISK_ERROR
 
     inode_num = open_files[fd]["inode"]
-    inode = read_inode(current_disk, inode_num)
-    if inode is None:
+    if inode_num is None:
         return DISK_ERROR
 
     if write_data_to_inode(current_disk, inode_num, buffer) == DISK_ERROR:
         return DISK_ERROR
     
-
-
-    # blocks_needed = (size + BLOCKSIZE - 1) // BLOCKSIZE
-    # if blocks_needed > len(inode.direct_blocks):
-    #     return DISK_ERROR
-
-    # for i in range(blocks_needed):
-    #     block_data = buffer[i * BLOCKSIZE:(i + 1) * BLOCKSIZE]
-    #     block_num = inode.direct_blocks[i]
-    #     if block_num == 0:
-    #         block_num = allocate_block(current_disk)
-    #         if block_num == DISK_ERROR:
-    #             return DISK_ERROR
-    #         inode.direct_blocks[i] = block_num
-    #     write_block(current_disk, block_num, make_blocksize(block_data))
-
-    inode.size = size
-    #write_inode(current_disk, inode_num, inode)
     open_files[fd]["byte_pointer"] = 0
     return DISK_OK
 
@@ -203,6 +182,40 @@ def tfs_seek(fd, offset):
     open_files[fd]["byte_pointer"] = offset
     return DISK_OK
 
+def tfs_displayfragments():
+    global current_disk
+    data = bytearray(BLOCKSIZE)
+    read_block(current_disk, 0, data)
+    print(data[BITMAP_OFFSET:BITMAP_OFFSET + 5])
+    int_list = [int.from_bytes(data[i:i+1], byteorder="little") for i in range(BITMAP_OFFSET, BITMAP_OFFSET + NUMBER_OF_BLOCKS)]
+    print("Contiguous block memory ranges:")
+    print(find_ranges(int_list))
+
+def tfs_defrag():
+    global current_disk
+    block_0 = bytearray(BLOCKSIZE)
+    read_block(current_disk, 0, block_0)
+    bit_map = block_0[BITMAP_OFFSET:BITMAP_OFFSET + NUMBER_OF_BLOCKS]
+    first_index = 0
+    last_index = len(bit_map) - 1
+
+    while first_index < last_index:
+        if bit_map[first_index] == 1:
+            first_index += 1
+        elif bit_map[last_index] == 0:
+            last_index -= 1
+        else:
+            swap_blocks(current_disk, first_index, last_index)
+            update_inode_block(current_disk, first_index, last_index)
+            bit_map[first_index] = 1
+            bit_map[last_index] = 0
+            first_index += 1
+            last_index -= 1
+
+
+    insert_byte_data(block_0, BITMAP_OFFSET, bit_map)
+    write_block(current_disk, 0, block_0)
+    return DISK_OK
 
 
 
@@ -215,7 +228,6 @@ def main():
     #open the disk to test
     disk = open_disk(DEFAULT_DISK_NAME, 0)
 
-
     #pen a file named file1 on current mounted file system
     fd1 = tfs_open("file1")
     # Write a repeated "Hello, World!" to file1. message is > one block
@@ -225,50 +237,38 @@ def main():
     buffer = bytearray(1)
     tfs_seek(fd1, 0)
     
-    # Read and print each byte from "file1" until reaching the end of the file
-    while tfs_readByte(fd1, buffer) == DISK_OK:
-        print(buffer.decode('utf-8'), end="")
-
     tfs_close(fd1)
-
     #same for file 2
     fd2 = tfs_open("file2")
     tfs_write(fd2, b"inode 2 having more daata here", len(b"inode 2 having more daata here"))
     tfs_close(fd2)
 
-    fd3 = tfs_open("file1")
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, ME!", len(b"BEEEE, ME!"))
-    tfs_write(fd3, b"BEEEE, MY!", len(b"BEEEE, MY!"))
+
+    fd3 = tfs_open("file3")
+    tfs_write(fd3, b"allocate another file", len(b"inode 2 having more daata here"))
+    tfs_close(fd3)
+
+    fd4 = tfs_open("file4")
+    tfs_write(fd4, b"allocate one last  file", len(b"inode 2 having more daata here"))
+    tfs_close(fd4)
+
+    
+    fd2 = tfs_open("file2")
+    tfs_delete(fd2)
+    tfs_close(fd2)
+
+    fd2 = tfs_open("file3")
+    tfs_delete(fd2)
+    tfs_close(fd2)
+
+    tfs_displayfragments()
+    fd1 = tfs_open("file4")
+    tfs_defrag()
     while tfs_readByte(fd1, buffer) == DISK_OK:
         print(buffer.decode('utf-8'), end="")
+
+    tfs_displayfragments()
+    
 
 
     # Unmount the TinyFS

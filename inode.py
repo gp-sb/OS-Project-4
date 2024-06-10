@@ -16,7 +16,6 @@ INODE_SIZE = 14 #Subject to change
 #Object to load data into, so we can use in python
 class Inode:
     def __init__(self, data):
-        
         #if we are reading data or just creating a new inode
         if data != b'':
             self.fromBytes(data)
@@ -106,6 +105,23 @@ def write_inode(disk, inode_number, inode):
     end_index = start_index + INODE_SIZE
     inode_block_bytes[start_index:end_index] = inode_bytes
     write_block(disk, 1, make_blocksize(inode_block_bytes))
+
+def update_inode_block(disk, new_block, old_block):
+
+    #Iterate through inodes to find the inode with the old block
+    data = bytearray(BLOCKSIZE)
+    read_block(disk, 2, data)
+
+    for i in range(0, INODE_SIZE*MAX_INODES, INODE_SIZE):
+        inode_bytes = data[i:i+INODE_SIZE]
+        print(inode_bytes)
+        inode = Inode(inode_bytes)
+        for b in range(MAX_BLOCKS_PER_INODE):
+            if inode.direct_blocks[b] == old_block:
+                print(data[i+DIRECT_BLOCK_OFFSET+b])
+                data[i+DIRECT_BLOCK_OFFSET+b] = new_block
+                write_block(disk, 2, data)
+                return DISK_OK
     
 # Determines if we can add data to old block, or if we need to add a new block, updates the inode accordingly,
 # Returns:
