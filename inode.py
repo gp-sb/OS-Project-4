@@ -119,11 +119,9 @@ def update_inode_block(disk, new_block, old_block):
 
     for i in range(0, INODE_SIZE*MAX_INODES, INODE_SIZE):
         inode_bytes = data[i:i+INODE_SIZE]
-        print(inode_bytes)
         inode = Inode(inode_bytes)
         for b in range(MAX_BLOCKS_PER_INODE):
             if inode.direct_blocks[b] == old_block:
-                print(data[i+DIRECT_BLOCK_OFFSET+b])
                 data[i+DIRECT_BLOCK_OFFSET+b] = new_block
                 write_block(disk, 2, data)
                 return DISK_OK

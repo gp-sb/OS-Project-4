@@ -88,7 +88,6 @@ def create_inode(name):
             inode_num = i // entry_size
             root_dir_block[i:i+8] = name.ljust(8, '\x00').encode('utf-8')
             root_dir_block[i+8:i+10] = to_bytes(inode_num, 2)
-            print(root_dir_block)
             write_block(current_disk, 1, root_dir_block)
             return inode_num
     return DISK_ERROR
@@ -224,7 +223,6 @@ def tfs_displayfragments():
     global current_disk
     data = bytearray(BLOCKSIZE)
     read_block(current_disk, 0, data)
-    print(data[BITMAP_OFFSET:BITMAP_OFFSET + 5])
     int_list = [int.from_bytes(data[i:i+1], byteorder="little") for i in range(BITMAP_OFFSET, BITMAP_OFFSET + NUMBER_OF_BLOCKS)]
     print("Contiguous block memory ranges:")
     print(find_ranges(int_list))
