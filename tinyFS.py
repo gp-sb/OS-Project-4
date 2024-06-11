@@ -182,6 +182,44 @@ def tfs_seek(fd, offset):
     open_files[fd]["byte_pointer"] = offset
     return DISK_OK
 
+
+# Extra functions for exceptional students
+
+
+def tfs_rename(old_name, new_name):
+    global current_disk
+    #read in root
+    root_dir_block = bytearray(BLOCKSIZE)
+    read_block(current_disk, 1, root_dir_block)
+    entry_size = 10 #8byte name and 2 byte entry number
+
+    for i in range(0, len(root_dir_block), entry_size):
+        #decode name portionn
+        if root_dir_block[i:i+8].decode('utf-8').strip('\x00') == old_name:
+            #update the name
+            root_dir_block[i:i+8] = new_name.ljust(8, '\x00').encode('utf-8')
+            write_block(current_disk, 1, root_dir_block)
+            return DISK_OK
+    return DISK_ERROR
+
+def tfs_readdir():
+    global current_disk
+    #read in root
+    root_dir_block = bytearray(BLOCKSIZE)
+    read_block(current_disk, 1, root_dir_block)
+    entry_size = 10 #8byte name and 2 byte entry number
+    file_list = []
+
+    for i in range(0, len(root_dir_block), entry_size):
+        #decode name portionn
+        name = root_dir_block[i:i+8].decode('utf-8').strip('\x00')
+        if name:
+            file_list.append(name)
+    
+    return file_list
+
+
+
 def tfs_displayfragments():
     global current_disk
     data = bytearray(BLOCKSIZE)
@@ -219,6 +257,7 @@ def tfs_defrag():
 
 
 
+
 def main():
 
     # Create a TinyFS file system and mount the TinyFS file system
@@ -239,7 +278,7 @@ def main():
     
     tfs_close(fd1)
     #same for file 2
-    fd2 = tfs_open("file2")
+    fd2 = tfs_open("file22")
     tfs_write(fd2, b"inode 2 having more daata here", len(b"inode 2 having more daata here"))
     tfs_close(fd2)
 
@@ -253,7 +292,7 @@ def main():
     tfs_close(fd4)
 
     
-    fd2 = tfs_open("file2")
+    fd2 = tfs_open("file22")
     tfs_delete(fd2)
     tfs_close(fd2)
 
@@ -263,6 +302,17 @@ def main():
 
     tfs_displayfragments()
     fd1 = tfs_open("file4")
+
+    print("Files before renaming:")
+    print(tfs_readdir())
+
+    # Rename file22
+    tfs_rename("file22", "file2")
+
+    print("Files after renaming:")
+    print(tfs_readdir())
+
+
     tfs_defrag()
     while tfs_readByte(fd1, buffer) == DISK_OK:
         print(buffer.decode('utf-8'), end="")

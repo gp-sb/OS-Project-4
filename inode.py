@@ -2,8 +2,12 @@ from libDisk import *
 from tinyFSHelpers import set_inodes_per_block, get_inodes_per_block, allocate_block, insert_byte_data, insert_data
 from utils import to_bytes, read_int_bytes, make_blocksize
 
+#Block Organization
+    #block 0 is superblock
+    #block 1 is root dir
+    #block 2 is INODE
 
-MAX_INODES = 20
+MAX_INODES = 20 # maximum amount of Inodes (max files is MAX_INODES-3)
 MAX_BLOCKS_PER_INODE = 6
 INODE_SIZE_OFFSET = 2
 REMAINING_DATA_IN_CURRENT_BLOCK_OFFSET = 6
@@ -11,6 +15,7 @@ DIRECT_BLOCK_OFFSET = 8
 
 ROOT_INODE = (0x02 + (0x00 * MAX_INODES)).to_bytes(12, byteorder='little')
 INODE_SIZE = 14 #Subject to change
+
 
 
 #Object to load data into, so we can use in python
